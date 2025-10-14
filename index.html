@@ -1,0 +1,336 @@
+
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>【生命靈數大師】單檔 App</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;600;800&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Noto Sans TC', system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji"; }
+    .mono { font-feature-settings: "ss01" 1; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900">
+  <div class="max-w-5xl mx-auto p-6">
+    <header class="mb-6">
+      <h1 class="text-3xl md:text-4xl font-extrabold tracking-tight">【生命靈數大師】世界頂尖 0.1% 等級助理</h1>
+      <p class="text-slate-600 mt-2">輸入生日即可生成完整 Markdown 報告與 1000 字天賦×人生使命總結。</p>
+    </header>
+
+    <section class="grid gap-4 md:grid-cols-[1fr_auto] items-end bg-white p-4 rounded-2xl shadow">
+      <div>
+        <label class="block text-sm font-semibold mb-1" for="dob">出生日期（YYYY-MM-DD）</label>
+        <input id="dob" type="text" placeholder="例如：1985-10-26" class="w-full rounded-xl border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+        <p id="err" class="text-rose-600 text-sm mt-2 hidden">請輸入正確格式：西元年月日，例如 1985-10-26</p>
+      </div>
+      <button id="go" class="h-10 px-5 rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-700 active:scale-[.99]">生成報告</button>
+    </section>
+
+    <section class="mt-6 grid gap-4 md:grid-cols-2">
+      <div class="bg-white p-4 rounded-2xl shadow">
+        <h2 class="font-bold text-lg">📄 Markdown 報告</h2>
+        <textarea id="md" class="mt-2 w-full h-[560px] md:h-[700px] rounded-xl border p-3 mono text-sm" spellcheck="false"></textarea>
+        <div class="mt-3 flex gap-2">
+          <button id="copyMd" class="px-4 py-2 rounded-lg bg-slate-900 text-white text-sm">複製 Markdown</button>
+          <button id="downloadMd" class="px-4 py-2 rounded-lg bg-slate-200 text-sm">下載 .md</button>
+        </div>
+      </div>
+      <div class="bg-white p-4 rounded-2xl shadow">
+        <h2 class="font-bold text-lg">✨ 1000 字天賦×人生使命總結</h2>
+        <textarea id="summary" class="mt-2 w-full h-[560px] md:h-[700px] rounded-xl border p-3 mono text-sm" spellcheck="false"></textarea>
+        <div class="mt-3 flex gap-2">
+          <button id="copySum" class="px-4 py-2 rounded-lg bg-slate-900 text-white text-sm">複製總結</button>
+          <button id="downloadSum" class="px-4 py-2 rounded-lg bg-slate-200 text-sm">下載 summary.txt</button>
+        </div>
+      </div>
+    </section>
+
+    <footer class="mt-8 text-xs text-slate-500">
+      <p>提醒：靈數為自我探索工具，並非命運鐵律；請搭配自由意志與行動驗證。</p>
+    </footer>
+  </div>
+
+  <script>
+    // =============== Numerology Core Helpers ===============
+    const MASTER_SET = new Set([11, 22, 33]);
+
+    function parseDob(str) {
+      const m = str.match(/^\d{4}-\d{2}-\d{2}$/);
+      if (!m) return null;
+      const [y, mo, d] = str.split('-').map(Number);
+      const dt = new Date(y, mo - 1, d);
+      // Validate real date
+      if (dt.getFullYear() !== y || (dt.getMonth() + 1) !== mo || dt.getDate() !== d) return null;
+      return { y, mo, d };
+    }
+
+    function sumDigits(n) {
+      return String(n).split('').reduce((a, c) => a + (c === '-' ? 0 : Number(c)), 0);
+    }
+
+    function reduceNumber(n, { preserveMaster = true } = {}) {
+      if (preserveMaster && MASTER_SET.has(n)) return n;
+      let x = n;
+      while (x > 9) {
+        x = sumDigits(x);
+        if (preserveMaster && MASTER_SET.has(x)) return x;
+      }
+      return x;
+    }
+
+    function lifePathNumber(y, mo, d) {
+      // Sum all digits of YYYY+MM+DD → reduce, preserving 11/22/33
+      const total = sumDigits(y) + sumDigits(mo) + sumDigits(d);
+      return reduceNumber(total, { preserveMaster: true });
+    }
+
+    function birthDayNumber(d) {
+      return reduceNumber(d, { preserveMaster: true });
+    }
+
+    function maturityNumber(lifePath, birthDay) {
+      return reduceNumber(lifePath + birthDay, { preserveMaster: true });
+    }
+
+    function nineGridCounts(y, mo, d) {
+      const s = String(y).padStart(4, '0') + String(mo).padStart(2, '0') + String(d).padStart(2, '0');
+      const counts = {1:0,2:0,3:0,4:0,5:0,6:0,7:0,8:0,9:0};
+      for (const ch of s) {
+        const n = Number(ch);
+        if (n >= 1 && n <= 9) counts[n]++;
+      }
+      return counts;
+    }
+
+    // Pinnacles & Challenges (fixed age ranges per spec: 0–27, 28–36, 37–45, 46+)
+    function pinnaclesAndChallenges(y, mo, d) {
+      const r = (v) => reduceNumber(v, { preserveMaster: true });
+      const monthR = r(mo);
+      const dayR = r(d);
+      const yearR = r(y);
+      const pin1 = r(monthR + dayR);
+      const pin2 = r(dayR + yearR);
+      const pin3 = r(pin1 + pin2);
+      const pin4 = r(monthR + yearR);
+      const ch1 = r(Math.abs(monthR - dayR));
+      const ch2 = r(Math.abs(dayR - yearR));
+      const ch3 = r(Math.abs(ch1 - ch2));
+      const ch4 = r(Math.abs(monthR - yearR));
+      const spans = [
+        { label: '0–27', years: [0,27], pinnacle: pin1, challenge: ch1 },
+        { label: '28–36', years: [28,36], pinnacle: pin2, challenge: ch2 },
+        { label: '37–45', years: [37,45], pinnacle: pin3, challenge: ch3 },
+        { label: '46+',  years: [46,120], pinnacle: pin4, challenge: ch4 },
+      ];
+      return { spans, basis: { monthR, dayR, yearR } };
+    }
+
+    function personalYear(y, mo, d, now = new Date()) {
+      const cy = now.getFullYear();
+      const total = sumDigits(cy) + sumDigits(mo) + sumDigits(d);
+      // Many systems reduce to 1–9; we keep master when it lands on 11/22 per spec style
+      return reduceNumber(total, { preserveMaster: true });
+    }
+
+    // =============== Knowledge: Keywords & Text Blocks ===============
+    const LP_KEYWORDS = {
+      1: { kw: '開創 / 自主 / 領導', action: '主動啟動新專案，設定明確目標並公開承諾。' },
+      2: { kw: '協調 / 共創 / 支援', action: '建立雙向合作，練習傾聽並促成共識。' },
+      3: { kw: '表達 / 創意 / 社交', action: '固定輸出內容（文/影/演講），以作品被看見。' },
+      4: { kw: '結構 / 穩定 / 紀律', action: '用 SOP 與時間方格，推進長期里程碑。' },
+      5: { kw: '變化 / 自由 / 探索', action: '規劃「可控的冒險」，以小迭代測試新路。' },
+      6: { kw: '責任 / 照護 / 美學', action: '先安頓家庭與身心，再設計有美感的服務。' },
+      7: { kw: '洞察 / 研究 / 靈性', action: '建立週期性深度學習與反思輸出。' },
+      8: { kw: '權能 / 事業 / 財富', action: '聚焦商業槓桿，制定現金流與績效機制。' },
+      9: { kw: '使命 / 人文 / 影響', action: '把故事與公益連結，擴大受眾與影響力。' },
+      11: { kw: '啟蒙 / 靈感 / 覺察', action: '以靈感服務群眾，建立穩定落地管道。' },
+      22: { kw: '巨構 / 實業 / 影響', action: '把願景具體化為可複製的系統與團隊。' },
+      33: { kw: '慈悲 / 教化 / 療癒', action: '用愛與教育傳遞價值，設計可擴散的課程。' },
+    };
+
+    const LP_DEEP = {
+      1: { strengths: ['決斷快','自驅高','擅長創業或領導開局'], challenges: ['易孤軍奮戰','完美主義','抗拒授權'], lessons: ['學會協作與授權','以成果而非控制來領導'], careers: ['創業者','產品負責人','品牌個體經營'] },
+      2: { strengths: ['同理與圓融','高敏感度','團隊潤滑劑'], challenges: ['過度在意他人','優柔寡斷'], lessons: ['建立邊界與主見','把協調專長商品化'], careers: ['PM/營運','人資/教練','顧問/夥伴關係'] },
+      3: { strengths: ['語言天賦','內容創意','感染力'], challenges: ['三分鐘熱度','分心'], lessons: ['建立輸出節奏','以作品體系化'], careers: ['行銷/公關','內容創作者','講師/演說'] },
+      4: { strengths: ['耐心與紀律','工程化思維','可靠'], challenges: ['僵化','對變動焦慮'], lessons: ['在穩定中擁抱小幅創新'], careers: ['專案/工程','財會/法務','營運管理'] },
+      5: { strengths: ['適應力','探索力','連結不同領域'], challenges: ['衝動','缺乏收斂'], lessons: ['建立實驗→收斂迴圈'], careers: ['BD/國際業務','旅遊/媒體','新創跨部門'] },
+      6: { strengths: ['責任感','審美與療癒','關係經營'], challenges: ['過度付出','自我要求'], lessons: ['先照顧自己再照顧他人'], careers: ['設計/美學','顧問/治療師','社群經營'] },
+      7: { strengths: ['研究深度','系統思考','直覺敏銳'], challenges: ['孤立','過度理性或神秘'], lessons: ['把洞察轉成可用方案'], careers: ['研究/數據','顧問/策略','靈性教育'] },
+      8: { strengths: ['商業敏感','目標導向','資源整合'], challenges: ['過度控制','物質掛帥'], lessons: ['以價值與倫理引導權力'], careers: ['高階管理','投資/地產','成長營運'] },
+      9: { strengths: ['公益情懷','國際視野','敘事力'], challenges: ['理想化','情緒起伏'], lessons: ['用制度守護理想'], careers: ['非營利/教育','品牌敘事','文化創意'] },
+      11: { strengths: ['靈感通道','啟蒙他人','藝術與思想影響'], challenges: ['能量不穩','落地困難'], lessons: ['建立日常與結構支撐靈感'], careers: ['創意總監','心靈教練','公眾講者'] },
+      22: { strengths: ['宏大願景','工程化落地','組織化能力'], challenges: ['壓力大','過度雄心'], lessons: ['分階段推進與授權'], careers: ['建設型創業','社會企業','平台型事業'] },
+      33: { strengths: ['慈悲教化','群體療癒','藝術教育'], challenges: ['自我犧牲','界線模糊'], lessons: ['愛與界線並存'], careers: ['教育家','療癒師','公益領袖'] },
+    };
+
+    const CRYSTALS = {
+      1: { color: '紅 / 金', items: ['石榴石','紅瑪瑙','紅碧璽'], wear: '右手手串或墜飾，助行動與決斷' },
+      2: { color: '銀 / 乳白', items: ['月光石','珍珠','白色方解石'], wear: '貼近心口的項鍊，助情感共鳴與平衡' },
+      3: { color: '黃 / 橙', items: ['黃水晶','太陽石','琥珀'], wear: '腰間或手鏈，助表達與創意輸出' },
+      4: { color: '土褐 / 灰黑', items: ['赤鐵礦','黑曜石','煙晶'], wear: '左手手串，助穩定、邏輯與邊界' },
+      5: { color: '藍綠', items: ['海藍寶','綠松石','藍磷灰石'], wear: '靠近喉輪之項鍊，助旅行與溝通變革' },
+      6: { color: '粉 / 綠', items: ['粉晶','綠紋石','翠玉'], wear: '心口或無名指戒，助關係與美感責任' },
+      7: { color: '紫', items: ['紫水晶','舒俱萊','方解石'], wear: '睡眠旁或耳飾，助直覺與冥想深度' },
+      8: { color: '金棕 / 黑金', items: ['虎眼石','黃鐵礦','黑曜金絲'], wear: '右手或腰間，助權能、財務與執行力' },
+      9: { color: '靛藍', items: ['青金石','蘇打石','藍寶石'], wear: '貼近喉輪或眉心位，助使命與表達'],
+      11: { color: '透明 / 白金', items: ['白水晶','透石膏','天使石'], wear: '頭頂或胸前的垂墜，穩定靈感通道' },
+      22: { color: '黑 / 深灰', items: ['黑曜石','黑碧璽','隕石'], wear: '左手接地，長期配戴助落地與防護' },
+      33: { color: '祖母綠 / 青綠', items: ['孔雀石','綠松石','亞馬遜石'], wear: '胸口或耳飾，助慈悲教化之傳遞' },
+    };
+
+    // Utility
+    function joinItems(arr) { return arr.join('、'); }
+
+    function countsAnalysis(counts) {
+      const missing = Object.entries(counts).filter(([k,v]) => v === 0).map(([k]) => k);
+      const repeats = Object.entries(counts).filter(([k,v]) => v >= 2).map(([k,v]) => `${k}×${v}`);
+      const advices = [];
+      if (missing.length) advices.push(`缺失 ${missing.join('、')} → 可用習慣養成/課程/工具補足對應能量`);
+      if (repeats.length) advices.push(`重複 ${repeats.join('、')} → 天賦強化，但留意過度使用的盲點`);
+      return { missing, repeats, advice: advices.join('；') || '分佈均衡，維持當前節奏。' };
+    }
+
+    function stageStrategy(num) {
+      // generic mapping for any pinnacle/challenge value
+      const guide = {
+        1: '主動出擊、設定目標、培養領導與決斷。',
+        2: '建立夥伴關係、練習傾聽與協調共識。',
+        3: '強化表達與創意輸出，建立固定內容節奏。',
+        4: '用結構與紀律推進，打造SOP與長期主義。',
+        5: '擁抱變化，小步快跑迭代，勇於嘗新。',
+        6: '承擔責任、經營關係與美學體驗。',
+        7: '深度研究與反思，將洞見產品化。',
+        8: '聚焦事業與財務槓桿，設指標與現金流。',
+        9: '傳遞使命與服務社群，擴大影響力。',
+        11: '整合靈感與落地節奏，以啟發群眾為志業。',
+        22: '把願景工程化、系統化，打造可複製平台。',
+        33: '以慈悲教化為核心，設計可擴散的教學與療癒。'
+      };
+      return guide[num] || '穩健前進，持續自我精進與服務他人。';
+    }
+
+    function personalYearTip(py) {
+      const map = {
+        1: '開局年：立願景、定目標、播下新種子。',
+        2: '醞釀年：協作與關係，耐心布局與修整。',
+        3: '綻放年：溝通曝光、創意輸出與社交擴張。',
+        4: '築基年：紀律、系統與現金流體質化。',
+        5: '變革年：嘗試轉型，旅遊/學習/專案更替。',
+        6: '承擔年：家庭與團隊優先，品質與美感升級。',
+        7: '沉澱年：研究、內觀、打磨產品力。',
+        8: '成果年：績效與成長，追求回報與擴張。',
+        9: '收束年：完成/放下，為新週期清場。',
+        11: '靈感年：洞見湧現，需以作息承接與落地。',
+        22: '建構年：以系統與團隊推進大型里程碑。',
+        33: '服務年：以教化與公益擴大影響。',
+      };
+      return map[py] || '持續精進，關注身心節奏與步調。';
+    }
+
+    function buildMarkdown(data) {
+      const { input, lp, bd, mt, counts, countsInfo, pac, py, nowY } = data;
+      const lpInfo = LP_KEYWORDS[lp] || { kw: '', action: '' };
+      const deep = LP_DEEP[lp] || { strengths: [], challenges: [], lessons: [], careers: [] };
+      const cry = CRYSTALS[lp] || { color: '-', items: [], wear: '-' };
+
+      const A = `# A. 總覽\n\n- **生日**：${input}\n- **主命數**：${lp}\n- **生日數**：${bd}\n- **成熟數**：${mt}\n- **九宮格**：${Object.entries(counts).map(([k,v])=>`${k}(${v})`).join(' ')}\n- **流年**（${nowY}）：${py}`;
+
+      const B = `# B. 快速摘要\n\n**主命數 ${lp}｜關鍵字：${lpInfo.kw}**\\\n**一句建議：**${lpInfo.action}`;
+
+      const C = `# C. 主命數深度解讀\n\n**優勢**：${deep.strengths.join('、')}\\\n**挑戰**：${deep.challenges.join('、')}\\\n**核心課題**：${deep.lessons.join('、')}\\\n**職涯方向**：${deep.careers.join('、')}\\\n**三項行動建議**：\n1. ${lpInfo.action}\n2. 每週檢視一次行動/學習指標，建立回饋循環。\n3. 以 90 天為週期設置可量化里程碑。`;
+
+      const D = `# D. 生日數與成熟數解析\n\n- **生日數 ${bd}**：與日常性格與才能表達有關，建議在日常中刻意練習其優勢面。\n- **成熟數 ${mt}**：生命後半更顯的主題能量，代表長期將走向的使命與成就感來源。`;
+
+      const E = `# E. 九宮格分析\n\n- **缺失**：${countsInfo.missing.join('、') || '無'}\n- **重複**：${countsInfo.repeats.join('、') || '無'}\n- **建議**：${countsInfo.advice}`;
+
+      const F = `# F. 高峰與挑戰四階段\n\n${pac.spans.map(s=>`- **${s.label}**：⛰️高峰數 ${s.pinnacle}｜⚠️挑戰數 ${s.challenge}｜策略：${stageStrategy(s.pinnacle)}（挑戰：${stageStrategy(s.challenge)}）`).join('\n')}`;
+
+      const G = `# G. 當年流年提示\n\n- **流年 ${py}**：${personalYearTip(py)}\n- **短期建議**：以 12 週為一季，設定 1～2 個主題專案，明確 KPI 與周節奏。`;
+
+      const H = `# H. 人際與職涯適配\n\n- 團隊文化：與 ${lpInfo.kw} 相容的價值觀更能長期穩定。\n- 合作夥伴：互補你在 **缺失/挑戰** 的能量（見上）。\n- 推薦領域（例）：${(LP_DEEP[lp]?.careers || []).slice(0,5).join('、')}`;
+
+      const I = `# I. 30/90 天行動計劃\n\n**30 天（打底）**：\n- 每週 1 個行動/技能微實驗，建立最小可行節奏（MVP）。\n- 建立「輸入→輸出」循環（閱讀/學習→筆記/貼文/教學）。\n\n**90 天（成長）**：\n- 設定 1 個具有挑戰的里程碑，拆成 6 × 2 週 Sprint。\n- 每 2 週做一次回顧：保留有效、修正無效、專注聚焦。`;
+
+      const J = `# J. 注意事項\n\n靈數是 **探索工具** 而非命運鐵律。請以 **自由意志×現實行動** 驗證；當你做出不同選擇、建立新習慣時，生命走向也會隨之改變。`;
+
+      const K = `# K. 水晶/礦石建議\n\n- **代表色**：${cry.color}\n- **推薦水晶**：${joinItems(cry.items)}\n- **配戴形式**：${cry.wear}`;
+
+      return [A,B,C,D,E,F,G,H,I,J,K].join('\n\n---\n\n');
+    }
+
+    function buildSummary(data) {
+      const { input, lp, bd, mt, counts, countsInfo, pac, py } = data;
+      const lpInfo = LP_KEYWORDS[lp] || { kw: '', action: '' };
+      const deep = LP_DEEP[lp] || { strengths: [], challenges: [], lessons: [], careers: [] };
+      const cry = CRYSTALS[lp] || { color: '-', items: [], wear: '-' };
+
+      // ~1000字摘要（約 700–1200 字之間）
+      const parts = [];
+      parts.push(`你出生於 ${input}。你的主命數為 ${lp}（關鍵字：${lpInfo.kw}），顯示你天生被賦予的核心路徑與能量走向；生日數為 ${bd}，代表日常性格的展現方式；成熟數為 ${mt}，指向生命後半更清晰的使命輪廓。`);
+      parts.push(`從九宮格分佈來看：${Object.entries(counts).map(([k,v])=>`${k}出現${v}次`).join('、')}。${countsInfo.advice || ''}`);
+      parts.push(`主命數 ${lp} 的優勢是 ${deep.strengths.join('、')}；常見挑戰是 ${deep.challenges.join('、')}，因此你此生的核心課題在於 ${deep.lessons.join('、')}。在職涯選擇上，可優先考慮 ${deep.careers.join('、')} 等場景，把個人天賦轉化為可持續的價值輸出。`);
+      parts.push(`生命四階段的高峰與挑戰顯示，你在 0–27 歲面臨 ⛰️${pac.spans[0].pinnacle}/⚠️${pac.spans[0].challenge}，28–36 歲為 ⛰️${pac.spans[1].pinnacle}/⚠️${pac.spans[1].challenge}，37–45 歲為 ⛰️${pac.spans[2].pinnacle}/⚠️${pac.spans[2].challenge}，46 歲後為 ⛰️${pac.spans[3].pinnacle}/⚠️${pac.spans[3].challenge}。當你理解每一階段的能量本質，便能以對應策略前進：例如在高峰數為 1 的時期主動開局，在挑戰數為 4 的時期以結構與紀律面對瓶頸。`);
+      parts.push(`就當年的流年 ${py} 而言，${personalYearTip(py)} 建議你以 12 週為節奏設定 1–2 個重點專案，把「輸入→輸出」做成固定習慣，並用可量化指標檢核進度。`);
+      parts.push(`若要以自然物件支持你的路徑，建議使用代表色「${CRYSTALS[lp]?.color || '-'}」，搭配 ${joinItems(CRYSTALS[lp]?.items || [])} 等水晶，以 ${CRYSTALS[lp]?.wear || '-'} 的形式配戴，提醒自己把天賦活在日常選擇裡。`);
+      parts.push(`總之，你的人生主旋律是「${lpInfo.kw}」。當你落實「${LP_KEYWORDS[lp]?.action || ''}」，並透過 30/90 天的行動設計，把洞見化為結果，你將更靠近屬於自己的使命軌道，也更能在世界上留下獨特且長久的影響。`);
+      return parts.join('\n\n');
+    }
+
+    // =============== Wire-up ===============
+    function generateAll() {
+      const input = document.getElementById('dob').value.trim();
+      const err = document.getElementById('err');
+      const dt = parseDob(input);
+      if (!dt) { err.classList.remove('hidden'); return; } else { err.classList.add('hidden'); }
+      const { y, mo, d } = dt;
+      const lp = lifePathNumber(y, mo, d);
+      const bd = birthDayNumber(d);
+      const mt = maturityNumber(lp, bd);
+      const counts = nineGridCounts(y, mo, d);
+      const countsInfo = countsAnalysis(counts);
+      const pac = pinnaclesAndChallenges(y, mo, d);
+      const now = new Date();
+      const py = personalYear(y, mo, d, now);
+      const nowY = now.getFullYear();
+
+      const data = { input, y, mo, d, lp, bd, mt, counts, countsInfo, pac, py, nowY };
+      const md = buildMarkdown(data);
+      const sum = buildSummary(data);
+
+      document.getElementById('md').value = md;
+      document.getElementById('summary').value = sum;
+    }
+
+    document.getElementById('go').addEventListener('click', generateAll);
+    document.getElementById('dob').addEventListener('keydown', (e)=>{ if(e.key==='Enter') generateAll(); });
+
+    function download(filename, text) {
+      const a = document.createElement('a');
+      a.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(text));
+      a.setAttribute('download', filename);
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
+
+    document.getElementById('copyMd').onclick = ()=>{
+      const t = document.getElementById('md'); t.select(); document.execCommand('copy');
+    };
+    document.getElementById('downloadMd').onclick = ()=>{
+      download('numerology_report.md', document.getElementById('md').value);
+    };
+
+    document.getElementById('copySum').onclick = ()=>{
+      const t = document.getElementById('summary'); t.select(); document.execCommand('copy');
+    };
+    document.getElementById('downloadSum').onclick = ()=>{
+      download('summary.txt', document.getElementById('summary').value);
+    };
+  </script>
+</body>
+</html>
+
